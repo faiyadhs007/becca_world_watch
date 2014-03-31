@@ -25,12 +25,12 @@ class World(BaseWorld):
         # Flag indicates whether the world is in testing mode
         #self.short_test = False
         self.TEST = False
-        self.VISUALIZE_PERIOD =  10 ** 1
+        self.VISUALIZE_PERIOD =  10 ** 4
         # Flag determines whether to plot all the features during display
         self.print_all_features = True
-        self.fov_horz_span = 16
-        self.fov_vert_span = 12
-        self.name = 'watch_world_12x16'
+        self.fov_horz_span = 12
+        self.fov_vert_span = 9
+        self.name = 'watch_world_9x12'
         print "Entering", self.name
         # Generate a list of the filenames to be used
         self.video_filenames = []
@@ -92,6 +92,11 @@ class World(BaseWorld):
         image = image.astype('float') / 256.
         # Convert the color image to grayscale
         self.intensity_image = np.sum(image, axis=2) / 3.
+        # Crop the image to get rid of sidebars
+        (image_height, image_width) = self.intensity_image.shape
+        self.intensity_image = self.intensity_image[
+                image_height / 4: 3 * image_height / 4,
+                image_width / 4 : 3 * image_width / 4]
         # Convert the grayscale to center-surround contrast pixels
         center_surround_pixels = wtools.center_surround(
                 self.intensity_image, self.fov_horz_span, self.fov_vert_span)
@@ -233,7 +238,7 @@ class World(BaseWorld):
         if (self.timestep % self.VISUALIZE_PERIOD != 0):
             return 
         print self.timestep, 'steps'
-        (projections, feature_activities) = agent.get_projections()
+        (projections, feature_activities) = agent.get_index_projections()
         # Make a copy of projections for finding the interpretation
         interpretation_by_feature = list(projections)
         interpretation = np.zeros((self.num_sensors, 1))
