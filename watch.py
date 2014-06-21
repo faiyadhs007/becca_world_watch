@@ -60,7 +60,7 @@ class World(BaseWorld):
         self.num_actions = 0
         self.sensors = np.zeros(self.num_sensors)
         #self.initialize_control_panel()
-        self.frame_counter = 10000
+        self.frame_counter = 20000
         self.frames_per_step = 3
         self.frames_per_sec = 30.
         if self.TEST:
