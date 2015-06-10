@@ -1,13 +1,14 @@
-import cv2
 import matplotlib.patches as mpatches
 import matplotlib.pyplot as plt
 import numpy as np
 import os
+import skimage.io as ski
 import sys
 
 from worlds.base_world import World as BaseWorld
 import core.tools as tools
 import becca_tools_control_panel.control_panel as cp
+import worlds.ffmpeg_tools as ft
 import worlds.world_tools as wtools
 
 class World(BaseWorld):
@@ -25,9 +26,9 @@ class World(BaseWorld):
         # Flag indicates whether the world is in testing mode
         #self.short_test = False
         self.TEST = False
-        self.VISUALIZE_PERIOD =  1e0
+        self.VISUALIZE_PERIOD =  1e5
         # Flag determines whether to plot all the features during display
-        self.print_all_features = False
+        self.print_all_features = True
         #self.fov_horz_span = 12
         #self.fov_vert_span = 9
         #self.name = 'watch_world_9x12_c'
@@ -36,8 +37,9 @@ class World(BaseWorld):
         self.name = 'watch_world_15x20'
         print "Entering", self.name
         # Generate a list of the filenames to be used
+        self.frames_dir_name = os.path.join('becca_world_watch', 'frames')
         self.video_filenames = []
-        extensions = ['.mpg', '.mp4', '.flv', '.avi']
+        extensions = ['.mpg', '.mp4', '.flv', '.avi', '.m4v']
         if self.TEST:
             test_filename = 'test_long.avi'
             truth_filename = 'truth_long.txt'
@@ -72,10 +74,23 @@ class World(BaseWorld):
         """ Queue up one of the video files and get it ready for processing """
         if self.video_file_count == 0:
             print 'Add some video files to the data directory'
+        # Empty out the frames directory
+        for filename in os.listdir(self.frames_dir_name): 
+            if '.jpg' in filename:
+                os.remove(os.path.join(self.frames_dir_name, filename))
+        # Pick and load a new video file    
         filename = self.video_filenames[
                 np.random.randint(0, self.video_file_count)]
         print 'Loading', filename
-        self.video_reader = cv2.VideoCapture(filename)
+        # Break video into frames
+        ft.break_movie(filename, self.data_dir_name, self.frames_dir_name)
+
+        # Make a list of still image filenames
+        self.frame_list = []
+        for filename in os.listdir(self.frames_dir_name):
+            if '.jpg' in filename:
+                self.frame_list.append(filename)
+
         self.clip_frame = 0
 
     def step(self, action): 
@@ -83,12 +98,19 @@ class World(BaseWorld):
         self.previous_image = self.intensity_image.copy()
         self.previous_sensors = self.sensors.copy()
         for _ in range(self.frames_per_step):
-            ((success, image)) = self.video_reader.read() 
+            success = True
+            if len(self.frame_list) > 0:
+                frame_name = self.frame_list.pop(0)
+                full_frame_name = os.path.join(self.frames_dir_name, frame_name)
+                image = ski.imread(full_frame_name) 
+            else:
+                 success = False
+            #((success, image)) = self.video_reader.read() 
         # Check whether the end of the clip has been reached
         if not success:
             if self.TEST:
                 # Terminate the test
-                self.video_reader.release()
+                #self.video_reader.release()
                 self.surprise_log.close()
                 print 'End of test reached'
                 tools.report_roc(self.ground_truth_filename, 
@@ -96,7 +118,10 @@ class World(BaseWorld):
                 sys.exit()
             else:
                 self.initialize_video_file()
-                ((success, image)) = self.video_reader.read() 
+                frame_name = self.frame_list.pop(0)
+                full_frame_name = os.path.join(self.frames_dir_name, frame_name)
+                image = ski.imread(full_frame_name) 
+                #((success, image)) = self.video_reader.read() 
         self.timestep += 1
         self.clip_frame += self.frames_per_step
         image = image.astype('float') / 256.
@@ -113,6 +138,9 @@ class World(BaseWorld):
         unsplit_sensors = center_surround_pixels.ravel()
         self.sensors = np.concatenate((np.maximum(unsplit_sensors, 0), 
                                        np.abs(np.minimum(unsplit_sensors, 0))))
+        # Boost the magnitude of the sensors
+        self.sensors *= 10.
+        self.sensors = np.minimum(1., self.sensors)
         reward = 0
         return self.sensors, reward
         
@@ -150,9 +178,9 @@ class World(BaseWorld):
         if (self.timestep % self.VISUALIZE_PERIOD != 0):
             return 
         print ' '.join([self.name, 'is', str(self.timestep), 'timesteps old.'])
-        
         (projections, feature_activities) = agent.get_index_projections()
 
+        '''
         # Make a composite plot showing the current state of the world
         max_blocks = 4
         max_cols = 6
@@ -286,6 +314,7 @@ class World(BaseWorld):
         #dpi = 120 # for a resolution of 1080 lines
         plt.savefig(full_filename, format='png', dpi=dpi, 
                     facecolor=fig.get_facecolor(), edgecolor='none') 
+        '''
 
         if self.print_all_features:
             log_directory = os.path.join('becca_world_watch', 'log')
