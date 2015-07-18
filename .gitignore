@@ -3,6 +3,8 @@
 log/*
 images/lib/*
 frames/*.png
+frames/*.jpg
+data/*.m4v
 becca_*
 tester_profile
 *.gz
